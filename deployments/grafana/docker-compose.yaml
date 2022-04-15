@@ -1,0 +1,138 @@
+version: "3.7"
+services:
+
+  prometheus:
+    image: prom/prometheus:main
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - prometheus:/prometheus
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml
+    networks:
+      - grafana
+
+  loki:
+    image: grafana/loki:2.4.1
+    container_name: loki
+    depends_on:
+      - s3
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml
+      - loki:/data/loki
+    command:
+      - "-config.file=/etc/loki/loki.yaml"
+    healthcheck:
+      test: wget -q --tries=1 -O- http://loki:3100/ready|grep -q "ready"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - grafana
+
+  s3:
+    image: minio/minio
+    container_name: minio_loki
+    environment:
+      MINIO_ACCESS_KEY: loki
+      MINIO_SECRET_KEY: example123
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    command: -c 'mkdir -p /data/loki && mkdir -p /data/tempo && /usr/bin/docker-entrypoint.sh minio server /data'
+    entrypoint: sh
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test: curl -f http://minio_loki:9000/minio/health/live
+      timeout: 20s
+    volumes:
+      - "minio_loki:/loki"
+    networks:
+      - grafana
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    depends_on:
+      - s3
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      - "55680:55680"
+    networks:
+      - grafana
+
+  promtail:
+    image: grafana/promtail:2.4.0
+    container_name: promtail
+    depends_on:
+      - loki
+    volumes:
+      - /var/log:/var/log
+      - ./promtail/promtail.yaml:/etc/promtail/config.yml
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    ports:
+      - "1515:1515"
+    networks:
+      - grafana
+
+  syslog-ng:
+    image: balabit/syslog-ng:latest
+    command:
+      - "-edvt"
+      - "--no-caps"
+    container_name: syslog-ng
+    depends_on:
+      - promtail
+    volumes:
+      - ./syslog-ng/syslog.conf:/etc/syslog-ng/syslog-ng.conf
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
+      - "601:601"
+    networks:
+      - grafana
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      #GF_SECURITY_ADMIN_USER: 'admin'
+      #GF_SECURITY_ADMIN_PASSWORD: 'admin'
+      GF_LOG_LEVEL: 'debug'
+      GF_INSTALL_PLUGINS: "grafana-simple-json-datasource,grafana-piechart-panel,gowee-traceroutemap-panel,agenty-flowcharting-panel"
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+    volumes:
+      - grafana:/var/lib/grafana:rw
+      #- ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      # - ./certs:/etc/grafana/certs
+    healthcheck:
+      test: curl --fail -s http://grafana:3000/ || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ports:
+      - "3000:3000"
+    networks:
+      - grafana
+
+volumes:
+  prometheus:
+  grafana:
+  loki:
+  minio_tempo:
+  minio_loki:
+  tempo_data:
+
+networks:
+  grafana:
+    external:
+      name: grafana

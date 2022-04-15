@@ -1,0 +1,9 @@
+tracing:
+  address: "localhost:55680"
+
+logging:
+  address: "localhost:514"
+
+prometheus:
+  address: ":8080"
+  endpoint: "/metrics"

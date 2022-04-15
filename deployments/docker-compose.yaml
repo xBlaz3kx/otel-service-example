@@ -1,0 +1,13 @@
+services:
+  observability-example:
+    build:
+      context: ../
+      dockerfile: ./build/package/Dockerfile
+    environment:
+      - EXAMPLE_TRACING_ADDRESS= "tempo:55680"
+      - EXAMPLE_LOGGING_ADDRESS= "syslog-ng:514"
+
+networks:
+  default:
+    external:
+      name: grafana
