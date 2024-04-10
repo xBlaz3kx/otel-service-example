@@ -34,6 +34,9 @@ var (
 )
 
 func run(cmd *cobra.Command, args []string) {
+	ctx, end := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer end()
+
 	var (
 		// Logging
 		loggingAddress = viper.GetString(config.LogAddress)
@@ -45,23 +48,18 @@ func run(cmd *cobra.Command, args []string) {
 		enableMetrics   = viper.GetBool(config.MetricsKey)
 		isDebug         = viper.GetBool(config.DebugKey)
 
-		ctx         = context.Background()
-		quitChannel = make(chan os.Signal)
 		traceLogger = logger.NewLogger(loggingAddress)
 		prometheus  *metrics.Prometheus
-
-		// Configure global resource for observability
-		res, err = resource.New(ctx,
-			resource.WithAttributes(
-				semconv.ServiceNameKey.String(ServiceName),
-			),
-			resource.WithOS(),
-			resource.WithHost(),
-		)
 	)
 
-	signal.Notify(quitChannel, os.Interrupt)
-
+	// Configure global observability resource
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(ServiceName),
+		),
+		resource.WithOS(),
+		resource.WithHost(),
+	)
 	if err != nil {
 		log.WithError(err).Fatalf("Cannot create resource")
 	}
@@ -88,39 +86,7 @@ func run(cmd *cobra.Command, args []string) {
 	exampleWorker := worker.NewWorker(newTracer, prometheus, traceLogger)
 	go exampleWorker.Start(ctx)
 
-	<-quitChannel
-}
-
-func initConfig() {
-	config.SetDefaults()
-	config.SetupEnv()
-	config.ReadConfig(cfgFile)
-}
-
-func setFlags() {
-	// Base
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file")
-	rootCmd.PersistentFlags().BoolP(config.DebugFlag, "d", false, "debug mode")
-	// Metric configuration
-	rootCmd.PersistentFlags().BoolP(config.MetricsFlag, "m", false, "enable metrics")
-	rootCmd.PersistentFlags().String(config.PrometheusAddressFlag, "", "prometheus address")
-	rootCmd.PersistentFlags().String(config.PrometheusEndpointFlag, "", "metrics endpoint")
-	// Tracing
-	rootCmd.PersistentFlags().String(config.TracingAddressFlag, "", "tracing address")
-	// Logging
-	rootCmd.PersistentFlags().String(config.LogAddressFlag, "", "log address")
-
-	// Bind flags to viper configuration
-	_ = viper.BindPFlag(config.PrometheusAddress, rootCmd.Flags().Lookup(config.PrometheusAddressFlag))
-	_ = viper.BindPFlag(config.TracingAddress, rootCmd.Flags().Lookup(config.TracingAddressFlag))
-	_ = viper.BindPFlag(config.LogAddress, rootCmd.Flags().Lookup(config.LogAddressFlag))
-	_ = viper.BindPFlag(config.PrometheusEndpoint, rootCmd.Flags().Lookup(config.PrometheusEndpointFlag))
-	_ = viper.BindPFlag(config.MetricsKey, rootCmd.Flags().Lookup(config.MetricsFlag))
-	_ = viper.BindPFlag(config.DebugKey, rootCmd.Flags().Lookup(config.DebugFlag))
-}
-
-func init() {
-	cobra.OnInitialize(initConfig)
+	<-ctx.Done()
 }
 
 func Execute() {

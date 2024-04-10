@@ -11,43 +11,36 @@ import (
 	"time"
 )
 
-var (
-	commonLabels = []attribute.KeyValue{
-		attribute.String("labelA", "test1"),
-		attribute.String("labelB", "test2"),
-		attribute.String("labelC", "test3"),
-	}
-)
-
-type (
-	Worker struct {
-		tracer     *tracer.Tracer
-		prometheus *metrics.Prometheus
-		logger     *logger.Logger
-	}
-)
+type Worker struct {
+	tracer     *tracer.Tracer
+	prometheus *metrics.Prometheus
+	logger     *logger.Logger
+	labels     []attribute.KeyValue
+}
 
 func NewWorker(tracer *tracer.Tracer, prometheus *metrics.Prometheus, logger *logger.Logger) *Worker {
 	return &Worker{
 		tracer:     tracer,
 		prometheus: prometheus,
 		logger:     logger,
+		labels: []attribute.KeyValue{
+			attribute.String("labelA", "test1"),
+			attribute.String("labelB", "test2"),
+			attribute.String("labelC", "test3"),
+		},
 	}
 }
 
 func (w *Worker) Start(ctx context.Context) {
 	// Work begins; start a trace
-	ctx, span := w.tracer.Start(
-		ctx,
-		"Parent",
-		"Parent span!",
-		trace.WithAttributes(commonLabels...))
+	ctx, span := w.tracer.Start(ctx, "Parent", "Parent span!", trace.WithAttributes(w.labels...))
+	defer span.End()
 
 	// Simulate a workload
 	for i := 0; i < 10; i++ {
 		// Start a new span, log both the traceId and spanId
 		spanName := fmt.Sprintf("Sample-%d", i)
-		_, iSpan := w.tracer.Start(ctx, spanName, "Doing really hard work")
+		ctx, iSpan := w.tracer.Start(ctx, spanName, "Doing really hard work")
 		// Wait for a second
 		<-time.After(time.Second)
 
@@ -62,8 +55,6 @@ func (w *Worker) Start(ctx context.Context) {
 
 		iSpan.End()
 	}
-
-	span.End()
 
 	w.logger.Get().Info("Done!")
 }
