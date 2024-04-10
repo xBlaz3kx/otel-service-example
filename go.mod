@@ -7,7 +7,7 @@ go 1.17
 require (
 	github.com/gin-gonic/gin v1.7.7
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cobra v1.3.0
+	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.10.0
 	go.opentelemetry.io/otel v1.3.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.3.0
@@ -34,7 +34,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
