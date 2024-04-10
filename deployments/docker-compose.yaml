@@ -1,8 +1,9 @@
 services:
   observability-example:
     build:
-      context: ../
+      context: ..
       dockerfile: ./build/package/Dockerfile
+      target: app
     environment:
       - EXAMPLE_TRACING_ADDRESS= "tempo:55680"
       - EXAMPLE_LOGGING_ADDRESS= "syslog-ng:514"
